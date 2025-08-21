@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dental Clinic Scraper</title>
+    <!-- Corrected the link to Tailwind CSS -->
     <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <!-- Corrected the link to Google Fonts -->
     <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap)" rel="stylesheet">
     <style>
         body {
@@ -20,16 +22,16 @@
 
             <div class="mb-6">
                 <label for="url-list" class="block text-sm font-medium text-gray-700 mb-2">Enter URLs:</label>
-                <textarea id="url-list" rows="10" class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"></textarea>
+                <textarea id="url-list" rows="10" class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="e.g.&#10;[https://www.mydentist.co.uk/&#10;https://www.exampledental.co.uk/](https://www.mydentist.co.uk/&#10;https://www.exampledental.co.uk/)"></textarea>
             </div>
 
             <button id="scrape-button" class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300 ease-in-out transform hover:-translate-y-1">
-                Scrape Websites
+                Analyze Websites
             </button>
 
             <div id="loading" class="mt-6 text-center hidden">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                <p class="mt-2 text-gray-600">Scraping in progress...</p>
+                <p class="mt-2 text-gray-600">Analyzing in progress... this may take a moment.</p>
             </div>
 
             <div id="results" class="mt-8"></div>
@@ -45,6 +47,7 @@
     </div>
 
     <script>
+        // --- DATA ---
         const dentalGroups = [
             { name: "mydentist", url: "[https://www.mydentist.co.uk/](https://www.mydentist.co.uk/)" },
             { name: "Portman Dental Care", url: "[https://www.portmandentalcare.com/](https://www.portmandentalcare.com/)" },
@@ -56,107 +59,168 @@
             { name: "Sync Dental", url: "[https://syncdental.co.uk/](https://syncdental.co.uk/)" },
             { name: "Carholme Dental Group", url: "[https://carholmedentalgroup.co.uk/](https://carholmedentalgroup.co.uk/)" }
         ];
+        
+        // Keywords to look for in a website's text to identify it as part of a group
+        const groupKeywords = [
+            'find a practice', 'our locations', 'our practices', 'dental group', 
+            'number of practices', 'join our group', 'more than one practice', 'nationwide',
+            'across the uk'
+        ];
 
-        const dentalGroupsList = document.getElementById('dental-groups-list');
-        dentalGroups.forEach(group => {
-            const li = document.createElement('li');
-            li.classList.add('flex', 'items-center', 'p-3', 'bg-gray-50', 'rounded-md', 'hover:bg-gray-100', 'transition');
-            li.innerHTML = `
-                <svg class="h-6 w-6 text-indigo-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.536a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-                <a href="${group.url}" target="_blank" class="text-indigo-600 hover:underline font-medium">${group.name}</a>
-            `;
-            dentalGroupsList.appendChild(li);
-        });
-
+        // --- DOM ELEMENTS ---
         const scrapeButton = document.getElementById('scrape-button');
         const urlList = document.getElementById('url-list');
         const resultsDiv = document.getElementById('results');
         const loadingDiv = document.getElementById('loading');
+        const dentalGroupsList = document.getElementById('dental-groups-list');
 
-        scrapeButton.addEventListener('click', async () => {
-            const urls = urlList.value.split('\\n').filter(url => url.trim() !== '');
+        // --- FUNCTIONS ---
+
+        /**
+         * Populates the list of known dental groups on the page.
+         */
+        function populateDentalGroups() {
+            dentalGroups.forEach(group => {
+                const li = document.createElement('li');
+                li.classList.add('flex', 'items-center', 'p-3', 'bg-gray-50', 'rounded-md', 'hover:bg-gray-100', 'transition');
+                li.innerHTML = `
+                    <svg class="h-6 w-6 text-indigo-500 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.536a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <a href="${group.url}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline font-medium break-all">${group.name}</a>
+                `;
+                dentalGroupsList.appendChild(li);
+            });
+        }
+
+        /**
+         * Main function to handle the scraping process when the button is clicked.
+         */
+        async function handleScrape() {
+            const urls = urlList.value.split('\n').map(url => url.trim()).filter(url => url !== '');
             if (urls.length === 0) {
-                resultsDiv.innerHTML = '<p class="text-red-500">Please enter at least one URL.</p>';
+                resultsDiv.innerHTML = '<p class="text-red-500 text-center">Please enter at least one URL.</p>';
                 return;
             }
 
             resultsDiv.innerHTML = '';
             loadingDiv.classList.remove('hidden');
+            scrapeButton.disabled = true;
+            scrapeButton.classList.add('opacity-50', 'cursor-not-allowed');
 
+            // Process each URL one by one.
             for (const url of urls) {
-                await scrapeUrl(url.trim());
+                await analyzeUrl(url);
             }
 
             loadingDiv.classList.add('hidden');
-        });
+            scrapeButton.disabled = false;
+            scrapeButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
 
-        async function scrapeUrl(url) {
+        /**
+         * Analyzes a single URL to determine if it's a group or single clinic.
+         * @param {string} url - The URL to analyze.
+         */
+        async function analyzeUrl(url) {
             const resultCard = document.createElement('div');
-            resultCard.classList.add('p-4', 'mb-4', 'border', 'rounded-lg', 'shadow-sm', 'bg-white');
+            resultCard.classList.add('p-4', 'mb-4', 'border', 'rounded-lg', 'shadow-sm', 'bg-white', 'transition-all', 'duration-300');
             
             let domain;
+            let fullUrl = url;
+            if (!fullUrl.startsWith('http')) {
+                fullUrl = 'https://' + fullUrl;
+            }
+
             try {
-                domain = new URL(url).hostname;
+                domain = new URL(fullUrl).hostname;
             } catch (error) {
-                resultCard.innerHTML = `
-                    <h3 class="font-bold text-lg text-red-600">Invalid URL: ${url}</h3>
-                `;
+                resultCard.innerHTML = `<h3 class="font-bold text-lg text-red-600">Invalid URL: ${url}</h3>`;
                 resultsDiv.appendChild(resultCard);
                 return;
             }
 
+            // Initial state of the card with a loader
             resultCard.innerHTML = `
                 <div class="flex justify-between items-center">
-                    <h3 class="font-bold text-lg text-gray-800">${url}</h3>
+                    <h3 class="font-bold text-lg text-gray-800 break-all">${url}</h3>
                     <div class="loader inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
                 </div>
             `;
             resultsDiv.appendChild(resultCard);
 
+            try {
+                // Use a CORS proxy to fetch the website content.
+                // NOTE: Public proxies are for development/personal use, not for production.
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(fullUrl)}`;
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error(`Failed to fetch with status: ${response.status}`);
+                
+                const data = await response.json();
+                const htmlContent = data.contents;
 
-            // This is a placeholder for a real backend scraping service.
-            // In a real application, you would make an API call to a server-side
-            // script that can bypass CORS restrictions.
-            // For this example, we'll simulate a delay and then provide a mock result.
-            await new Promise(resolve => setTimeout(resolve, 2000));
+                if (!htmlContent) throw new Error('Could not retrieve website content.');
 
-            // Mock logic to determine if it's a group
-            const isGroup = Math.random() > 0.5;
-            let groupName = "Unknown Group";
-            if (isGroup) {
-                 const knownGroup = dentalGroups.find(g => domain.includes(g.name.toLowerCase().replace(/\\s+/g, '')));
-                 if(knownGroup) {
-                    groupName = knownGroup.name;
-                 } else {
-                    // Extract a plausible name from the domain
-                    groupName = domain.split('.')[0].replace('-', ' ').replace('dental', '').replace('care', '').trim();
-                    groupName = groupName.charAt(0).toUpperCase() + groupName.slice(1) + " Dental Group";
-                 }
+                // Simple analysis: check for keywords in the HTML content.
+                const textContent = htmlContent.toLowerCase();
+                const isGroup = groupKeywords.some(keyword => textContent.includes(keyword));
+                
+                let groupName = "Unknown Group";
+                if (isGroup) {
+                    const knownGroup = dentalGroups.find(g => domain.includes(g.name.toLowerCase().replace(/\s+/g, '')));
+                    if (knownGroup) {
+                        groupName = knownGroup.name;
+                    } else {
+                        // Extract a plausible name from the domain
+                        let name = domain.split('.')[0].replace(/-/g, ' ');
+                        name = name.charAt(0).toUpperCase() + name.slice(1);
+                        groupName = `${name} Dental Group`;
+                    }
+                }
+
+                // Update card with the result
+                updateResultCard(resultCard, url, domain, isGroup, groupName);
+
+            } catch (error) {
+                console.error("Scraping error for " + url, error);
+                updateResultCard(resultCard, url, domain, false, null, `Error: Could not analyze website. It may be blocking scrapers.`);
+            }
+        }
+
+        /**
+         * Updates a result card with the analysis outcome.
+         */
+        function updateResultCard(cardElement, url, domain, isGroup, groupName, errorMessage = null) {
+            let status, groupInfo;
+
+            if (errorMessage) {
+                status = `<span class="px-3 py-1 text-sm font-semibold text-red-800 bg-red-200 rounded-full">Error</span>`;
+                groupInfo = `<div class="mt-2"><p class="text-red-600">${errorMessage}</p></div>`;
+            } else if (isGroup) {
+                status = `<span class="px-3 py-1 text-sm font-semibold text-green-800 bg-green-200 rounded-full">Group</span>`;
+                groupInfo = `<div class="mt-2">
+                                <p><strong>Detected Group Name:</strong> ${groupName}</p>
+                                <p><strong>Domain:</strong> ${domain}</p>
+                           </div>`;
+            } else {
+                status = `<span class="px-3 py-1 text-sm font-semibold text-blue-800 bg-blue-200 rounded-full">Single Clinic</span>`;
+                groupInfo = '';
             }
 
-
-            const status = isGroup
-                ? `<span class="px-3 py-1 text-sm font-semibold text-green-800 bg-green-200 rounded-full">Group</span>`
-                : `<span class="px-3 py-1 text-sm font-semibold text-blue-800 bg-blue-200 rounded-full">Single Clinic</span>`;
-
-            const groupInfo = isGroup
-                ? `<div class="mt-2">
-                        <p><strong>Group Name:</strong> ${groupName}</p>
-                        <p><strong>Domain:</strong> ${domain}</p>
-                   </div>`
-                : '';
-
-            resultCard.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <h3 class="font-bold text-lg text-gray-800">${url}</h3>
+            cardElement.innerHTML = `
+                <div class="flex justify-between items-center flex-wrap gap-2">
+                    <h3 class="font-bold text-lg text-gray-800 break-all">${url}</h3>
                     ${status}
                 </div>
                 ${groupInfo}
             `;
         }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            populateDentalGroups();
+            scrapeButton.addEventListener('click', handleScrape);
+        });
     </script>
 </body>
 </html>
-```
